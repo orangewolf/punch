@@ -407,6 +407,20 @@ Main {
         end
       end
 
+      # If a project name is a character or two off from an existing project, ask whether it was a typo or not.
+      def typo_check(project)
+        unless (roots = @db.roots).include?(project)
+          alternatives = roots.map { |existing_proj|
+            p1, p2 = [existing_proj, project].map {|p| p.instance_eval("chars.to_a")}
+            c = p1 & p2
+            tanimoto = (c.size.to_f / (p1.size + p2.size - c.size)).to_f
+            
+            existing_proj if (0.6..0.99).include?(tanimoto)
+          }.compact.uniq
+          puts "Psst: did you mean to type '#{alternatives.join(' or ')}'? (You typed is '#{project}')\n"
+        end
+      end
+
       def punch which, project, options = {}
         now = options.getopt 'now'
         messages = [
@@ -415,13 +429,7 @@ Main {
         ].flatten.compact
         @db.transaction do
           if project
-            unless (roots = @db.roots).include?(project) # check for typos
-              alternatives = roots.map {|existing_proj|
-                p1, p2 = [existing_proj, project].map {|p| p.instance_eval("chars.to_a")}
-                ((p1|p2).size - p2.size).abs <= 1 ? existing_proj : nil
-              }.compact.uniq
-              puts "Psst: is '#{project}' what you meant to type, or should it be '#{alternatives.join(' or ')}'?\n"
-            end
+            typo_check(project)
             create project
             list = @db[project.to_s]
             entry = list.last
